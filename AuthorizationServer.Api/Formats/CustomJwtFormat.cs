@@ -4,10 +4,11 @@ using Microsoft.Owin.Security;
 using Microsoft.Owin.Security.DataHandler.Encoder;
 using System;
 using System.Collections.Generic;
-using System.IdentityModel.Tokens;
 using System.Linq;
 using System.Web;
-using Thinktecture.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
+using Microsoft.IdentityModel.Tokens;
+using System.Security.Claims;
 
 namespace AuthorizationServer.Api.Formats
 {
@@ -39,12 +40,18 @@ namespace AuthorizationServer.Api.Formats
   
             var keyByteArray = TextEncodings.Base64Url.Decode(symmetricKeyAsBase64);
 
-            var signingKey = new HmacSigningCredentials(keyByteArray);
+            var signingKey = new SymmetricSecurityKey(keyByteArray);
+            var signingCredentials = new SigningCredentials(signingKey, SecurityAlgorithms.HmacSha256);
 
             var issued = data.Properties.IssuedUtc;
             var expires = data.Properties.ExpiresUtc;
 
-            var token = new JwtSecurityToken(_issuer, audienceId, data.Identity.Claims, issued.Value.UtcDateTime, expires.Value.UtcDateTime, signingKey);
+            //Optional: Map Identity Claims names to JWT names (using jwtClaims instead of 'data.Identity.Claims' in JwtSecurityToken constructor)
+            var jwtClaims = new List<Claim>();
+            jwtClaims.Add(new Claim("sub", data.Identity.Name));
+            jwtClaims.AddRange(data.Identity.Claims.Where(c => c.Type == ClaimTypes.Role).Select(c => new Claim("roles", c.Value)));
+
+            var token = new JwtSecurityToken(_issuer, audienceId, jwtClaims, issued.Value.UtcDateTime, expires.Value.UtcDateTime, signingCredentials);
 
             var handler = new JwtSecurityTokenHandler();
 
